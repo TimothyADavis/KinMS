@@ -240,8 +240,7 @@ function kinms_create_velfield_onesided,velrad,velprof,r_flat,inc,posang,gassigm
   if n_elements(vradial) gt 1 then vradial_rad=interpol(vradial,velrad,r_flat) else vradial_rad=fltarr(n_elements(r_flat))+vradial
   if n_elements(vposang) gt 1 then vposang_rad=interpol(vposang,velrad,r_flat) else vposang_rad=vposang
   ;;;;
-
-   ;;;;; include random motions
+  ;;;;; include random motions
   if keyword_set(gassigma) then begin
      veldisp=randomn(seed[3],n_elements(xpos)) 
      if n_elements(gassigma) gt 1 then veldisp=temporary(veldisp)*interpol(gassigma,velrad,r_flat) else veldisp=temporary(veldisp)*gassigma
