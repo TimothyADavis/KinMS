@@ -176,7 +176,26 @@
 ;
 ;##############################################################################
 
-pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra=ra,dec=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang
+
+function kinms_samplefromarbdist_onesided,sbrad,sbprof,nsamps,seed,r_flat=r_flat,diskthick=diskthick
+     px=dblarr(n_elements(sbprof))
+     sbprofboost=sbprof*(2*!dpi*abs(sbrad))                                                        ;; boost flux in outer parts to compensate for spreading over 2pi radians
+     for i=1,n_elements(sbrad)-1 do px[i] = INT_TABULATED((sbrad[0:i]),(sbprofboost[0:i]),/double) ;; integrate surf brightness w.r.t radius   
+     px/=max(px)                                                                                   ;; normalize
+     pick=randomu(seed[0],nsamps)                                                                  ;; pick random y to transform
+     phi=randomu(seed[1],nsamps)*2*!dpi                                                            ;; random angle
+     r_flat=interpol(sbrad,px,pick)                                                                ;; invert to get correct distribution
+     if n_elements(diskthick) gt 1 then diskthick_here=interpol(diskthick,sbrad,r_flat) else diskthick_here=diskthick
+     zpos=(diskthick_here)*((randomu(seed[2],nsamps)*2)-1)                                         ;; do disk thickness
+     r_3d = sqrt((r_flat^2)+zpos^2)                                                                ;; 3d distance to each
+     theta=acos(zpos/r_3d)                                                                         ;; angle out of plane
+     xpos=((r_3d*cos(phi)*sin(theta)))                                                             ;; go to cartesian
+     ypos=((r_3d*sin(phi)*sin(theta)))                                                             ;; go to cartesian
+     return,TRANSPOSE([[xpos],[ypos],[zpos]])                                                      ;; return INCLOUDS format
+end
+
+
+pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra=ra,dec=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang,sb_sampfunc=sb_sampfunc
 ;!EXCEPT = 2
 
 
@@ -212,7 +231,7 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
   if keyword_set(fixseed) then begin
      seed=indgen(4)+100 ;; fix seeds 
   endif else seed=randomu(seedit,4)*100. ;; random seeds
-  
+  if not keyword_set(sb_sampfunc) then sb_sampfunc="kinms_samplefromarbdist_onesided"
 
 ;;;;
   
@@ -225,37 +244,17 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
   vphasecent=(vphasecen-phasecen)/[dx,dy]
 ;;;;
 
+  if not keyword_set(inclouds) then inclouds=call_FUNCTION(sb_sampfunc,sbrad,sbprof,nsamps,seed,r_flat=r_flat,diskthick=diskthick) ;; use the function in sb_sampfunc to setup inclouds, if its not already set
 
-;;;; if using INCLOUDS then set this up
-  if keyword_set(inclouds) then begin
-     xpos=reform(INCLOUDS[0,*]/dx)
-     ypos=reform(INCLOUDS[1,*]/dy)
-     zpos=reform(INCLOUDS[2,*]/dx)
-     r_flat=sqrt(((xpos-(phasecen[0]/dx))^2) + ((ypos-(phasecen[1]/dy))^2))
-     if keyword_set(VLOS_CLOUDS) then los_vel=VLOS_CLOUDS
-  endif
+  
+;;;; set up INCLOUDS for use
+  xpos=reform(INCLOUDS[0,*]/dx)
+  ypos=reform(INCLOUDS[1,*]/dy)
+  zpos=reform(INCLOUDS[2,*]/dx)
+  if n_elements(r_flat) eq 0 then r_flat=sqrt(((xpos-(phasecen[0]/dx))^2) + ((ypos-(phasecen[1]/dy))^2))
+  if keyword_set(VLOS_CLOUDS) then los_vel=VLOS_CLOUDS
+  
 
-
-;;;; Else draw from arb. surface brightness distribution in SBPROF ;;;
-  if not keyword_set(inclouds) then begin  
-     sbprofs=sbprof ;; save originals for later
-     sbrads=sbrad   ;;save originals for later
-     px=dblarr(n_elements(sbprof))
-     sbrad=temporary(sbrad)/dx
-     sbprof=temporary(sbprof)*(2*!dpi*abs(sbrad))  ;; boost flux in outer parts to compensate for spreading over 2pi radians
-     for i=1,n_elements(sbrad)-1 do px[i] = INT_TABULATED((sbrad[0:i]),(sbprof[0:i]),/double) ;; integrate surf brightness w.r.t radius
-     px/=max(px)                          ;; normalize
-     pick=randomu(seed[0],nsamps)         ;; pick random y to transform
-     phi=randomu(seed[1],nsamps)*2*!dpi   ;; random angle
-     r_flat=interpol(sbrad,px,pick)       ;; invert to get correct distribution
-     if n_elements(diskthick) gt 1 then diskthick_here=interpol(diskthick,sbrad,r_flat) else diskthick_here=diskthick
-     zpos=(diskthick_here/dx)*((randomu(seed[2],nsamps)*2)-1) ;; do disk thickness
-     r_3d = sqrt((r_flat^2)+zpos^2)                                  ;; 3d distance to each
-     theta=acos(zpos/r_3d)                                           ;; angle out of plane
-     xpos=((r_3d*cos(phi)*sin(theta)))                               ;; go to cartesian
-     ypos=((r_3d*sin(phi)*sin(theta)))                               ;; go to cartesian
-  ;;;;
-  endif
 
 
 ;;;; create velocity structure ;;;;
@@ -317,8 +316,9 @@ if not keyword_set(inclouds) then begin
    INCLOUDS[0,*]=xpos*dx
    INCLOUDS[1,*]=ypos*dy
    INCLOUDS[2,*]=zpos*dx
-   vlos_clouds=los_vel
 endif
+if not keyword_set(vlos_clouds) then  vlos_clouds=los_vel
+
 ;;;;
  
  ; stop
@@ -373,10 +373,7 @@ endif
         cube*=((INT_TABULATED( sbrad, sbprof))/((total(cube)*dv)/(sqrt(beamsize[0]*beamsize[1])^2))) ;; normalize to get same flux as input sb profile variable
      endelse
   endelse
-if keyword_set(sbprof) then begin
-  sbprof=sbprofs ;; restore originals
-  sbrad=sbrads   ;;restore originals
-endif
+
 ;;;; write cube ;;;;
 
   if keyword_set(galname) then begin
