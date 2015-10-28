@@ -223,7 +223,7 @@ function kinms_samplefromarbdist_onesided,sbrad,sbprof,nsamps,seed,r_flat=r_flat
      theta=acos(zpos/r_3d)                                                                         ;; angle out of plane
      xpos=((r_3d*cos(phi)*sin(theta)))                                                             ;; go to cartesian
      ypos=((r_3d*sin(phi)*sin(theta)))                                                             ;; go to cartesian
-     return,TRANSPOSE([[xpos],[ypos],[zpos]])                                                      ;; return INCLOUDS format
+     return,[[xpos],[ypos],[zpos]]                                                                 ;; return INCLOUDS format
 end
 
 function kinms_create_velfield_onesided,velrad,velprof,r_flat,inc,posang,gassigma,seed,xpos,ypos,vphasecent,vposang=vposang,vradial=vradial,inc_rad=inc_rad,posang_rad=posang_rad
@@ -320,9 +320,9 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
   endif
   
 ;;;; set up INCLOUDS for use
-  xpos=reform(INCLOUDS[0,*]/dx)
-  ypos=reform(INCLOUDS[1,*]/dy)
-  zpos=reform(INCLOUDS[2,*]/dx)
+  xpos=reform(INCLOUDS[*,0]/dx)
+  ypos=reform(INCLOUDS[*,1]/dy)
+  zpos=reform(INCLOUDS[*,2]/dx)
   if n_elements(r_flat) eq 0 then r_flat=sqrt(((xpos-(phasecen[0]/dx))^2) + ((ypos-(phasecen[1]/dy))^2))
   if keyword_set(VLOS_CLOUDS) then los_vel=VLOS_CLOUDS
   
