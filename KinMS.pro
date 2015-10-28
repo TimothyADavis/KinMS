@@ -22,7 +22,7 @@
 ;    KinMS
 ;
 ; PURPOSE:
-;    Simulate rotating molecular gas distributions, and produce
+;    Simulate rotating gas distributions, and produce
 ;    datacubes in FITS format.
 ;
 ; CALLING SEQUENCE:
@@ -46,7 +46,7 @@
 ;    INC       Inclination angle of the gas disc on the sky
 ;              (degrees). Can input a constant or a vector,
 ;              giving the inclination as a function of the
-;              radius vector SBRAD (in order to model warps etc)
+;              radius vector VELRAD (in order to model warps etc)
 ;
 ;
 ;
@@ -132,20 +132,46 @@
 ;    FIXSEED   Fix the seeds supplied to the random number generators
 ;              so that the output will always be the same for given input
 ;              parameters
-;
+;    VRADIAL   Magnitude of inflow/outflowing motions (km/s). Negative
+;              numbers here are inflow, positive numbers denote
+;              outflow. These are included in the velocity field using
+;              formalism of KINEMETRY (Krajnović et al. 2006 MNRAS, 366, 787). 
+;              Can input a constant or a vector, giving the radial
+;              motion as a function of the radius vector
+;              VELRAD. Default is no inflow/outflow.
+;    SB_SAMPFUNC  The function to be used to generate a cloud of point
+;                 sources from the input surface brightness
+;                 profile. Default is to draw from a one sided
+;                 probability distribution. This can be swapped out by
+;                 using a user designed function which accepts the
+;                 same inputs/produces the same outputs if one has a
+;                 different behavior in mind.
+;    VEL_FUNC     The function to be used to generate the velocity
+;                 field for the cloud of point sources in INCLOUDS
+;                 based on the input circular velocity profile.
+;                 Default is a radially symetric velocity curve
+;                 This can be swapped out by using a user
+;                 designed function which accepts the same
+;                  inputs/produces the same outputs.
+
+
 ;  OPTIONAL OUTPUTS:
 ;
 ;    CUBEOUT       Returns the created cube as a 3 dimensional vector
 ;
+;    INCLOUDS      Returns the cloud of point sources created for your
+;                  model, incase they are useful for a future call.
 ;
+;    VLOS_CLOUDS   Returns the velocity of each point source created for your
+;                  model, incase they are useful for a future call.
+;    
+;   
 ; SIDE EFFECTS:
 ;    The output file is overwritten if it exists.
 ;
 ; RESTRICTIONS:
 ;    Requires IDL 5.0 or higher (square bracket array
-;    syntax). Requires the latest IDL astrolib, along with the
-;    hist_nd routine (a version of which is distributed with the
-;    package for ease).
+;    syntax). Requires the latest IDL astrolib.
 ;    
 ;
 ; USAGE EXAMPLE:
@@ -173,12 +199,74 @@
 ;                     of inflow and outflow
 ; 02/09/2015  v1.5 - Update to handling of position angles, added
 ;                    seperate velocity position angle/phasecentre
+; 28/10/2015  v1.6 - Updated to allow hot swapping of SBprofile and
+;                    velprofile handling.
 ;
 ;##############################################################################
 
-pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra=ra,dec=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang
-;!EXCEPT = 2
 
+function kinms_samplefromarbdist_onesided,sbrad,sbprof,nsamps,seed,r_flat=r_flat,diskthick=diskthick
+
+  ;;;; This function takes the input radial distribution and draws
+  ;;;; n samples from under it. It also accounts for disk thickness
+  
+     px=dblarr(n_elements(sbprof))
+     sbprofboost=sbprof*(2*!dpi*abs(sbrad))                                                        ;; boost flux in outer parts to compensate for spreading over 2pi radians
+     for i=1,n_elements(sbrad)-1 do px[i] = INT_TABULATED((sbrad[0:i]),(sbprofboost[0:i]),/double) ;; integrate surf brightness w.r.t radius   
+     px/=max(px)                                                                                   ;; normalize
+     pick=randomu(seed[0],nsamps)                                                                  ;; pick random y to transform
+     phi=randomu(seed[1],nsamps)*2*!dpi                                                            ;; random angle
+     r_flat=interpol(sbrad,px,pick)                                                                ;; invert to get correct distribution
+     if n_elements(diskthick) gt 1 then diskthick_here=interpol(diskthick,sbrad,r_flat) else diskthick_here=diskthick
+     zpos=(diskthick_here)*((randomu(seed[2],nsamps)*2)-1)                                         ;; do disk thickness
+     r_3d = sqrt((r_flat^2)+zpos^2)                                                                ;; 3d distance to each
+     theta=acos(zpos/r_3d)                                                                         ;; angle out of plane
+     xpos=((r_3d*cos(phi)*sin(theta)))                                                             ;; go to cartesian
+     ypos=((r_3d*sin(phi)*sin(theta)))                                                             ;; go to cartesian
+     return,[[xpos],[ypos],[zpos]]                                                                 ;; return INCLOUDS format
+end
+
+function kinms_create_velfield_onesided,velrad,velprof,r_flat,inc,posang,gassigma,seed,xpos,ypos,vphasecent,vposang=vposang,vradial=vradial,inc_rad=inc_rad,posang_rad=posang_rad
+
+
+  ;;;; This function takes the input circular velocity distribution
+  ;;;; and creates the velocity field taking into account warps,
+  ;;;; inflow/outflow etc as required by the keywords passed.
+  
+  vrad=interpol(velprof,velrad,r_flat)
+  los_vel=dblarr(n_elements(vrad))
+
+  ;;; in case of warps/inflow/outflow then setup vectors to deal with this
+  if n_elements(vradial) gt 1 then vradial_rad=interpol(vradial,velrad,r_flat) else vradial_rad=fltarr(n_elements(r_flat))+vradial
+  if n_elements(vposang) gt 1 then vposang_rad=interpol(vposang,velrad,r_flat) else vposang_rad=vposang
+  ;;;;
+  ;;;;; include random motions
+  if keyword_set(gassigma) then begin
+     veldisp=randomn(seed[3],n_elements(xpos)) 
+     if n_elements(gassigma) gt 1 then veldisp=temporary(veldisp)*interpol(gassigma,velrad,r_flat) else veldisp=temporary(veldisp)*gassigma
+  endif else  veldisp=fltarr(n_elements(xpos))
+  ;;;;;
+
+  ;;;;; project velocities taking into account inclination, which may change with radius
+  w=where(xpos+vphasecent[0] ne 0.0 and ypos+vphasecent[1] ne 0.0)
+  ang2rot=(90-(posang_rad-vposang_rad))
+  los_vel[w]=veldisp[w]                                                                                                                              ;; random motions
+  los_vel[w]+=vrad[w]*(cos(atan(float(ypos[w]+vphasecent[1])/float(xpos[w]+vphasecent[0]))+(!dtor*(90-ang2rot[w])))*sin(inc_rad[w]*!dtor))           ;; circular motions
+  los_vel[w]+=vradial_rad[w]*(sin(atan(float(ypos[w]+vphasecent[1])/float(xpos[w]+vphasecent[0]))+(!dtor*(90-ang2rot[w])))*sin(inc_rad[w]*!dtor))    ;; inflow/outflow
+  w=where(xpos+vphasecent[0] eq 0.0 and ypos+vphasecent[1] eq 0.0)
+  if w[0] ne -1 then los_vel[w]=veldisp[w]+(vrad[w]*sin(inc_rad[w]*!dtor))+ vradial_rad[w]*(sin(atan(float(ypos[w])/float(xpos[w]))+(!dtor*(90-ang2rot[w])))*sin(inc_rad[w]*!dtor))
+  w=where(xpos+vphasecent[0] gt 0.0)
+  los_vel[w]=temporary(los_vel[w])*(-1)
+  ;;;;;;
+  
+  return,los_vel
+  end
+
+
+pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra=ra,dec=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang,sb_sampfunc=sb_sampfunc,vel_func=vel_func
+;!EXCEPT = 2
+  
+ ;;;; Main procedure
 
 ;;;; set defaults ;;;;
   if not keyword_set(nsamps) then nsamps=10000
@@ -212,8 +300,8 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
   if keyword_set(fixseed) then begin
      seed=indgen(4)+100 ;; fix seeds 
   endif else seed=randomu(seedit,4)*100. ;; random seeds
-  
-
+  if not keyword_set(sb_sampfunc) then sb_sampfunc="kinms_samplefromarbdist_onesided"
+  if not keyword_set(vel_func) then vel_func="kinms_create_velfield_onesided"
 ;;;;
   
 ;;;; work out images sizes ;;;;
@@ -225,79 +313,36 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
   vphasecent=(vphasecen-phasecen)/[dx,dy]
 ;;;;
 
-
-;;;; if using INCLOUDS then set this up
-  if keyword_set(inclouds) then begin
-     xpos=reform(INCLOUDS[0,*]/dx)
-     ypos=reform(INCLOUDS[1,*]/dy)
-     zpos=reform(INCLOUDS[2,*]/dx)
-     r_flat=sqrt(((xpos-(phasecen[0]/dx))^2) + ((ypos-(phasecen[1]/dy))^2))
-     if keyword_set(VLOS_CLOUDS) then los_vel=VLOS_CLOUDS
+  if not keyword_set(inclouds) then begin
+     inclouds=call_FUNCTION(sb_sampfunc,sbrad,sbprof,nsamps,seed,r_flat=r_flat,diskthick=diskthick) ;; use the function in sb_sampfunc to setup inclouds, if its not already set
+     r_flat/=dx
   endif
+  
+;;;; set up INCLOUDS for use
+  xpos=reform(INCLOUDS[*,0]/dx)
+  ypos=reform(INCLOUDS[*,1]/dy)
+  zpos=reform(INCLOUDS[*,2]/dx)
+  if n_elements(r_flat) eq 0 then r_flat=sqrt(((xpos-(phasecen[0]/dx))^2) + ((ypos-(phasecen[1]/dy))^2))
+  if keyword_set(VLOS_CLOUDS) then los_vel=VLOS_CLOUDS
+  
 
-
-;;;; Else draw from arb. surface brightness distribution in SBPROF ;;;
-  if not keyword_set(inclouds) then begin  
-     sbprofs=sbprof ;; save originals for later
-     sbrads=sbrad   ;;save originals for later
-     px=dblarr(n_elements(sbprof))
-     sbrad=temporary(sbrad)/dx
-     sbprof=temporary(sbprof)*(2*!dpi*abs(sbrad))  ;; boost flux in outer parts to compensate for spreading over 2pi radians
-     for i=1,n_elements(sbrad)-1 do px[i] = INT_TABULATED((sbrad[0:i]),(sbprof[0:i]),/double) ;; integrate surf brightness w.r.t radius
-     px/=max(px)                          ;; normalize
-     pick=randomu(seed[0],nsamps)         ;; pick random y to transform
-     phi=randomu(seed[1],nsamps)*2*!dpi   ;; random angle
-     r_flat=interpol(sbrad,px,pick)       ;; invert to get correct distribution
-     if n_elements(diskthick) gt 1 then diskthick_here=interpol(diskthick,sbrad,r_flat) else diskthick_here=diskthick
-     zpos=(diskthick_here/dx)*((randomu(seed[2],nsamps)*2)-1) ;; do disk thickness
-     r_3d = sqrt((r_flat^2)+zpos^2)                                  ;; 3d distance to each
-     theta=acos(zpos/r_3d)                                           ;; angle out of plane
-     xpos=((r_3d*cos(phi)*sin(theta)))                               ;; go to cartesian
-     ypos=((r_3d*sin(phi)*sin(theta)))                               ;; go to cartesian
-  ;;;;
-  endif
 
 
 ;;;; create velocity structure ;;;;
   if not keyword_set(VLOS_CLOUDS) then begin
-     velrad=temporary(velrad)/dx
-     vrad=interpol(velprof,velrad,r_flat)
-     los_vel=dblarr(n_elements(vrad))
-     ;;; in case of warps/inflow/outflow then setup vectors to deal
-     ;;; with this
-     if n_elements(inc) gt 1 then inc_rad=interpol(inc,sbrad,r_flat) else inc_rad=fltarr(n_elements(r_flat))+inc
-     if n_elements(vradial) gt 1 then vradial_rad=interpol(vradial,sbrad,r_flat) else vradial_rad=fltarr(n_elements(r_flat))+vradial
-     if n_elements(posang) gt 1 then posang_rad=interpol(posang,sbrad,r_flat) else posang_rad=posang
-     if n_elements(vposang) gt 1 then vposang_rad=interpol(vposang,sbrad,r_flat) else vposang_rad=vposang
-     ;;;;
-     ;;;;; include random motions
-     if keyword_set(gassigma) then begin
-        veldisp=randomn(seed[3],n_elements(xpos)) 
-        if n_elements(gassigma) gt 1 then veldisp=temporary(veldisp)*interpol(gassigma,sbrad,r_flat) else veldisp=temporary(veldisp)*gassigma
-     endif else  veldisp=fltarr(n_elements(xpos))
-     ;;;;;
-     ;;;;; project velocities taking into account inclination, which may change with radius
-     w=where(xpos+vphasecent[0] ne 0.0 and ypos+vphasecent[1] ne 0.0)
-     ang2rot=(90-(posang_rad-vposang_rad))
-     los_vel[w]=veldisp[w] ;; random motions
-     los_vel[w]+=vrad[w]*(cos(atan(float(ypos[w]+vphasecent[1])/float(xpos[w]+vphasecent[0]))+(!dtor*(90-ang2rot[w])))*sin(inc_rad[w]*!dtor)) ;; circular motions
-     los_vel[w]+=vradial_rad[w]*(sin(atan(float(ypos[w]+vphasecent[1])/float(xpos[w]+vphasecent[0]))+(!dtor*(90-ang2rot[w])))*sin(inc_rad[w]*!dtor)) ;; inflow/outflow
-     w=where(xpos+vphasecent[0] eq 0.0 and ypos+vphasecent[1] eq 0.0)
-     if w[0] ne -1 then los_vel[w]=veldisp[w]+(vrad[w]*sin(inc_rad[w]*!dtor))+ vradial_rad[w]*(sin(atan(float(ypos[w])/float(xpos[w]))+(!dtor*(90-ang2rot[w])))*sin(inc_rad[w]*!dtor))
-     w=where(xpos+vphasecent[0] gt 0.0)
-     los_vel[w]=temporary(los_vel[w])*(-1)
-;;;;
+
+     if n_elements(inc) gt 1 then inc_rad=interpol(inc,velrad,r_flat) else inc_rad=fltarr(n_elements(r_flat))+inc
+     if n_elements(posang) gt 1 then posang_rad=interpol(posang,velrad,r_flat) else posang_rad=posang
      
-;;;; project face on clouds to desired inclination ;;;;
+     los_vel=call_FUNCTION(vel_func,velrad/dx,velprof,r_flat,inc,posang,gassigma,seed,xpos,ypos,vphasecent,vposang=vposang,vradial=vradial,inc_rad=inc_rad,posang_rad=posang_rad)
+     ;;;; project face on clouds to desired inclination ;;;;
      c = cos(inc_rad/!radeg)
      s = sin(inc_rad/!radeg)
      x2 =  xpos
      y2 =  c*ypos + s*zpos
-     z2 = -s*ypos + c*zpos
-     
+     z2 = -s*ypos + c*zpos       
      if n_elements(posang) ge 1 then begin  
         ;; rotate gas on sky to required angle
-        
         ang=90-posang_rad
         c = cos(ang/!radeg)
         s = sin(ang/!radeg)
@@ -311,17 +356,8 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
      y2=ypos
      z2=zpos
   endelse
-;;;; return the clouds used incase they are useful in future calls ;;;
-if not keyword_set(inclouds) then begin
-   inclouds=dblarr(3,n_elements(xpos))
-   INCLOUDS[0,*]=xpos*dx
-   INCLOUDS[1,*]=ypos*dy
-   INCLOUDS[2,*]=zpos*dx
-   vlos_clouds=los_vel
-endif
-;;;;
- 
- ; stop
+  if not keyword_set(vlos_clouds) then  vlos_clouds=los_vel
+
   
   
 ;;;; now add the flux into the cube
@@ -373,10 +409,7 @@ endif
         cube*=((INT_TABULATED( sbrad, sbprof))/((total(cube)*dv)/(sqrt(beamsize[0]*beamsize[1])^2))) ;; normalize to get same flux as input sb profile variable
      endelse
   endelse
-if keyword_set(sbprof) then begin
-  sbprof=sbprofs ;; restore originals
-  sbrad=sbrads   ;;restore originals
-endif
+
 ;;;; write cube ;;;;
 
   if keyword_set(galname) then begin
