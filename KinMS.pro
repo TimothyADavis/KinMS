@@ -22,7 +22,7 @@
 ;    KinMS
 ;
 ; PURPOSE:
-;    Simulate rotating molecular gas distributions, and produce
+;    Simulate rotating gas distributions, and produce
 ;    datacubes in FITS format.
 ;
 ; CALLING SEQUENCE:
@@ -46,7 +46,7 @@
 ;    INC       Inclination angle of the gas disc on the sky
 ;              (degrees). Can input a constant or a vector,
 ;              giving the inclination as a function of the
-;              radius vector SBRAD (in order to model warps etc)
+;              radius vector VELRAD (in order to model warps etc)
 ;
 ;
 ;
@@ -132,20 +132,46 @@
 ;    FIXSEED   Fix the seeds supplied to the random number generators
 ;              so that the output will always be the same for given input
 ;              parameters
-;
+;    VRADIAL   Magnitude of inflow/outflowing motions (km/s). Negative
+;              numbers here are inflow, positive numbers denote
+;              outflow. These are included in the velocity field using
+;              formalism of KINEMETRY (Krajnović et al. 2006 MNRAS, 366, 787). 
+;              Can input a constant or a vector, giving the radial
+;              motion as a function of the radius vector
+;              VELRAD. Default is no inflow/outflow.
+;    SB_SAMPFUNC  The function to be used to generate a cloud of point
+;                 sources from the input surface brightness
+;                 profile. Default is to draw from a one sided
+;                 probability distribution. This can be swapped out by
+;                 using a user designed function which accepts the
+;                 same inputs/produces the same outputs if one has a
+;                 different behavior in mind.
+;    VEL_FUNC     The function to be used to generate the velocity
+;                 field for the cloud of point sources in INCLOUDS
+;                 based on the input circular velocity profile.
+;                 Default is a radially symetric velocity curve
+;                 This can be swapped out by using a user
+;                 designed function which accepts the same
+;                  inputs/produces the same outputs.
+
+
 ;  OPTIONAL OUTPUTS:
 ;
 ;    CUBEOUT       Returns the created cube as a 3 dimensional vector
 ;
+;    INCLOUDS      Returns the cloud of point sources created for your
+;                  model, incase they are useful for a future call.
 ;
+;    VLOS_CLOUDS   Returns the velocity of each point source created for your
+;                  model, incase they are useful for a future call.
+;    
+;   
 ; SIDE EFFECTS:
 ;    The output file is overwritten if it exists.
 ;
 ; RESTRICTIONS:
 ;    Requires IDL 5.0 or higher (square bracket array
-;    syntax). Requires the latest IDL astrolib, along with the
-;    hist_nd routine (a version of which is distributed with the
-;    package for ease).
+;    syntax). Requires the latest IDL astrolib.
 ;    
 ;
 ; USAGE EXAMPLE:
@@ -173,6 +199,8 @@
 ;                     of inflow and outflow
 ; 02/09/2015  v1.5 - Update to handling of position angles, added
 ;                    seperate velocity position angle/phasecentre
+; 28/10/2015  v1.6 - Updated to allow hot swapping of SBprofile and
+;                    velprofile handling.
 ;
 ;##############################################################################
 
@@ -238,7 +266,8 @@ function kinms_create_velfield_onesided,velrad,velprof,r_flat,inc,posang,gassigm
 
 pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra=ra,dec=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang,sb_sampfunc=sb_sampfunc,vel_func=vel_func
 ;!EXCEPT = 2
-
+  
+ ;;;; Main procedure
 
 ;;;; set defaults ;;;;
   if not keyword_set(nsamps) then nsamps=10000
