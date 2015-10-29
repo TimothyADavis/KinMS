@@ -332,7 +332,8 @@ pro KinMStest_infits,_extra=_extra
    x=reform(xvec[index[0,*]])
    y=reform(yvec[index[1,*]])
    inclouds=[[x],[y],[y*0.0]]
-   vlos_clouds=interpol([-200,0,200],[-60,0,60],y) ;; impose a flat velocity profile
+   ang=80*!dtor
+   vlos_clouds=interpol([-200,0,200],[-60,0,60],y*sin(ang)+x*cos(ang)) ;; impose a flat velocity profile
 ;;;;
 
 ;;;; run the simulation ;;;;
