@@ -205,7 +205,7 @@
 ;##############################################################################
 
 
-function kinms_samplefromarbdist_onesided,sbrad,sbprof,nsamps,seed,r_flat=r_flat,diskthick=diskthick
+function kinms_samplefromarbdist_onesided,sbrad,sbprof,nsamps,seed,r_flat=r_flat,diskthick=diskthick,xpos=xpos,ypos=ypos,zpos=zpos
 
   ;;;; This function takes the input radial distribution and draws
   ;;;; n samples from under it. It also accounts for disk thickness
@@ -313,16 +313,20 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
   vphasecent=(vphasecen-phasecen)/[dx,dy]
 ;;;;
 
-  if not keyword_set(inclouds) then begin
-     inclouds=call_FUNCTION(sb_sampfunc,sbrad,sbprof,nsamps,seed,r_flat=r_flat,diskthick=diskthick) ;; use the function in sb_sampfunc to setup inclouds, if its not already set
+ if not keyword_set(inclouds) then begin
+     inclouds=call_FUNCTION(sb_sampfunc,sbrad,sbprof,nsamps,seed,r_flat=r_flat,diskthick=diskthick,xpos=xpos,ypos=ypos,zpos=zpos) ;; use the function in sb_sampfunc to setup inclouds, if its not already set
      r_flat/=dx
-  endif
-  
+     xpos/=dx
+     ypos/=dy
+     zpos/=dx
+  endif else begin
+     
 ;;;; set up INCLOUDS for use
-  xpos=reform(INCLOUDS[*,0]/dx)
-  ypos=reform(INCLOUDS[*,1]/dy)
-  zpos=reform(INCLOUDS[*,2]/dx)
-  if n_elements(r_flat) eq 0 then r_flat=sqrt(((xpos-(phasecen[0]/dx))^2) + ((ypos-(phasecen[1]/dy))^2))
+     xpos=reform(INCLOUDS[*,0]/dx)
+     ypos=reform(INCLOUDS[*,1]/dy)
+     zpos=reform(INCLOUDS[*,2]/dx)
+     if n_elements(r_flat) eq 0 then r_flat=sqrt(((xpos-(phasecen[0]/dx))^2) + ((ypos-(phasecen[1]/dy))^2))
+  endelse
   if keyword_set(VLOS_CLOUDS) then los_vel=VLOS_CLOUDS
   
 
