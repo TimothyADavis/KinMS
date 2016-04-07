@@ -1,10 +1,10 @@
 ;##############################################################################
 ;
-; Copyright (C) 2012, Timothy A. Davis
-; E-mail: tdavis -at- eso.org
+; Copyright (C) 2016, Timothy A. Davis
+; E-mail: DavisT -at- cardiff.ac.uk
 ;
-; Updated versions of the software are available from my web page
-; http://www.eso.org/~tdavis/
+; Updated versions of the software are available through github:
+; https://github.com/TimothyADavis/KinMS
 ; 
 ; If you have found this software useful for your research,
 ; I would appreciate an acknowledgment to the use of the
@@ -152,9 +152,12 @@
 ;                 Default is a radially symetric velocity curve
 ;                 This can be swapped out by using a user
 ;                 designed function which accepts the same
-;                  inputs/produces the same outputs.
-
-
+;                 inputs/produces the same outputs.
+;   RADTRANSFER   Run the radiative transfer function rad_transfer
+;                 to populate the cloud flux vector. See the help for
+;                 that function for more details.
+;
+;
 ;  OPTIONAL OUTPUTS:
 ;
 ;    CUBEOUT       Returns the created cube as a 3 dimensional vector
@@ -171,7 +174,8 @@
 ;
 ; RESTRICTIONS:
 ;    Requires IDL 5.0 or higher (square bracket array
-;    syntax). Requires the latest IDL astrolib.
+;    syntax). Requires the latest IDL astrolib. 
+;    Requires J.D Smiths hist_nd procedure (included in this package)
 ;    
 ;
 ; USAGE EXAMPLE:
@@ -179,8 +183,7 @@
 ;    
 ;
 ; MODIFICATION HISTORY:
-; tdavis@eso.org
-; http://www.eso.org/~tdavis/
+; DavisT@cardiff.ac.uk
 ; 05/11/2012. v1.00 - Cleaned up code and documentation ready for public release.  
 ; 07/03/2013. v1.10 - Added VSYS, PHASECEN AND RESTFREQ commands. Changed output fits headers to match
 ;                    WCS standards. 
@@ -201,6 +204,7 @@
 ;                    seperate velocity position angle/phasecentre
 ; 28/10/2015  v1.6 - Updated to allow hot swapping of SBprofile and
 ;                    velprofile handling.
+; 07/04/2016  v1.65- Added the rad_transfer mechanism 
 ;
 ;##############################################################################
 
@@ -258,12 +262,11 @@ function kinms_create_velfield_onesided,velrad,velprof,r_flat,inc,posang,gassigm
   w=where(xpos+vphasecent[0] gt 0.0)
   los_vel[w]=temporary(los_vel[w])*(-1)
   ;;;;;;
-  
   return,los_vel
   end
 
 
-pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra=ra,dec=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang,sb_sampfunc=sb_sampfunc,vel_func=vel_func
+pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra_position=ra,dec_position=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang,sb_sampfunc=sb_sampfunc,vel_func=vel_func,intsigma=intsigma,radtransfer=radtransfer
 ;!EXCEPT = 2
   
  ;;;; Main procedure
@@ -363,7 +366,9 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
   if not keyword_set(vlos_clouds) then  vlos_clouds=los_vel
 
   
-  
+if not keyword_set(FLUX_CLOUDS) and keyword_set(radtransfer) then FLUX_CLOUDS=rad_transfer(x2,y2,z2,los_vel,rad_transfer,intsigma=intsigma)
+
+
 ;;;; now add the flux into the cube
   los_vel_dv_cent2=round((los_vel/dv)+cent[2])
   x2_cent0=round(x2+cent[0])
@@ -402,9 +407,8 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
        endfor
   endif
 ;;;;
-;
-;;; normalize fluxes, if requested
-  if keyword_set(intflux) then begin
+
+if keyword_set(intflux) then begin
       if not keyword_set(cleanout) then cube *= ((intflux*total(psf))/((total(cube)*dv))) else cube *= ((intflux)/((total(cube)*dv))) ;; make total flux equal to influx
   endif else begin
      if keyword_set(flux_clouds) then begin
