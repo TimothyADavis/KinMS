@@ -400,7 +400,7 @@ vel=interpol([0,50,100,210,210],[0.01,0.5,1,3,500],x)
 
 
 ;;;; Simulate ;;;;
-KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,cubeout=f,nsamps=nsamps,_extra=_extra,intflux=30.,gassigma=gassigma
+KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,cubeout=f,nsamps=nsamps,_extra=_extra,intflux=30.,gassigma=gassigma,posang=270
 ;;;;
 
 
@@ -419,7 +419,7 @@ KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velpro
 ;;;; Plot the results ;;;;
    device,decomposed=0,RETAIN=2
    loadct,39,/silent
-   levs=v1[where(abs(v1) le max(vel*sin(!dtor*inc))+20.)]
+   levs=v1[where(abs(v1) le max(vel*sin(!dtor*inc))+50.)]
    !p.multi=[0,2,2]
    contour,mom0rot,x1,x1,/cell_fill,levels=(max(mom0rot)*((findgen(9)+1)/10.)),color=0,background=255,/xstyle,/ystyle,xtitle="RA (arcsec)",ytitle="DEC (arcsec)"
    al_legend,["Moment 0"],box=0,/top,/right,textcolor=0
