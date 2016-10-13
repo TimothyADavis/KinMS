@@ -241,7 +241,7 @@ function kinms_create_velfield_onesided,velrad,velprof,r_flat,inc,posang,gassigm
   los_vel=dblarr(n_elements(vrad))
 
   ;;; in case of warps/inflow/outflow then setup vectors to deal with this
-  if n_elements(vradial) gt 1 then vradial_rad=interpol(vradial,velrad,r_flat) else vradial_rad=fltarr(n_elements(r_flat))+vradial
+
   if n_elements(vposang) gt 1 then vposang_rad=interpol(vposang,velrad,r_flat) else vposang_rad=vposang
   ;;;;
   ;;;;; include random motions
@@ -252,15 +252,13 @@ function kinms_create_velfield_onesided,velrad,velprof,r_flat,inc,posang,gassigm
   ;;;;;
 
   ;;;;; project velocities taking into account inclination, which may change with radius
-  w=where(xpos+vphasecent[0] ne 0.0 and ypos+vphasecent[1] ne 0.0)
-  ang2rot=(90-(posang_rad-vposang_rad))
-  los_vel[w]=veldisp[w]                                                                                                                              ;; random motions
-  los_vel[w]+=vrad[w]*(cos(atan(float(ypos[w]+vphasecent[1])/float(xpos[w]+vphasecent[0]))+(!dtor*(90-ang2rot[w])))*sin(inc_rad[w]*!dtor))           ;; circular motions
-  los_vel[w]+=vradial_rad[w]*(sin(atan(float(ypos[w]+vphasecent[1])/float(xpos[w]+vphasecent[0]))+(!dtor*(90-ang2rot[w])))*sin(inc_rad[w]*!dtor))    ;; inflow/outflow
-  w=where(xpos+vphasecent[0] eq 0.0 and ypos+vphasecent[1] eq 0.0)
-  if w[0] ne -1 then los_vel[w]=veldisp[w]+(vrad[w]*sin(inc_rad[w]*!dtor))+ vradial_rad[w]*(sin(atan(float(ypos[w])/float(xpos[w]))+(!dtor*(90-ang2rot[w])))*sin(inc_rad[w]*!dtor))
-  w=where(xpos+vphasecent[0] gt 0.0)
-  los_vel[w]=temporary(los_vel[w])*(-1)
+  ang2rot=((posang_rad-vposang_rad))
+  los_vel=veldisp                                                                                                                              ;; random motions
+  los_vel+=(-1)*vrad*(cos(atan(float(ypos+vphasecent[1]),float(xpos+vphasecent[0]))+(!dtor*(ang2rot)))*sin(inc_rad*!dtor))           ;; circular motions
+  if vradial ne 0 then begin
+	  if n_elements(vradial) gt 1 then vradial_rad=interpol(vradial,velrad,r_flat) else vradial_rad=fltarr(n_elements(r_flat))+vradial
+      los_vel+=vradial_rad*(sin(atan(float(ypos+vphasecent[1]),float(xpos+vphasecent[0]))+(!dtor*(ang2rot)))*sin(inc_rad*!dtor))    ;; inflow/outflow
+  endif
   ;;;;;;
   return,los_vel
   end
@@ -348,22 +346,21 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
      x2 =  xpos
      y2 =  c*ypos + s*zpos
      z2 = -s*ypos + c*zpos       
-     if n_elements(posang) ge 1 then begin  
-        ;; rotate gas on sky to required angle
-        ang=90-posang_rad
-        c = cos(ang/!radeg)
-        s = sin(ang/!radeg)
-        x3 =  c*x2 + s*y2
-        y3 = -s*x2 + c*y2
-        x2=x3
-        y2=y3
-     endif
+   
+     ;; rotate gas on sky to required angle
+     ang=90-posang_rad
+     c = cos(ang/!radeg)
+     s = sin(ang/!radeg)
+     x3 =  c*x2 + s*y2
+     y3 = -s*x2 + c*y2
+     x2=x3
+     y2=y3
+	 vlos_clouds=los_vel
   endif else begin
      x2=xpos
      y2=ypos
      z2=zpos
   endelse
-  if not keyword_set(vlos_clouds) then  vlos_clouds=los_vel
 
   
 if not keyword_set(FLUX_CLOUDS) and keyword_set(radtransfer) then FLUX_CLOUDS=rad_transfer(x2,y2,z2,los_vel,rad_transfer,intsigma=intsigma)
@@ -398,8 +395,8 @@ if not keyword_set(FLUX_CLOUDS) and keyword_set(radtransfer) then FLUX_CLOUDS=ra
 
 ;;;; do beamsize convolution ;;;;
   if not keyword_set(cleanout) then begin 
-      psf=rot(psf_gaussian(Npixel=[xsize,ysize],fwhm=[beamsize[0]/dx,beamsize[1]/dy],NDIMEN=2,/double) >1e-7,90-beamsize[2],/interp,missing=0.0)
-      doconvolve=where(total(total(cube,1),1) gt 0.0) 
+       psf=makebeam([xsize,ysize],[beamsize[0]/dx,beamsize[1]/dy],rot=beamsize[2])
+	   doconvolve=where(total(total(cube,1),1) gt 0.0) 
      ;; only convolve the planes with flux in them for speed
      for nplane=0,n_elements(doconvolve)-1 do begin
         ;; if you want a convolved cube, then convolve it
