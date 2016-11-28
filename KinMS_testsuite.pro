@@ -15,8 +15,7 @@ pro KinMStest_ngc4324,_extra=_extra
    xsize=128 ;; arcseconds
    ysize=128 ;; arcseconds
    vsize=800 ;; km/s
-   dx=1 ;; arcseconds/pixel
-   dy=1 ;; arcseconds/pixel
+   cellsize=1 ;; arcseconds/pixel
    dv=10 ;; km/s/channel
    beamsize=4. ;; arcseconds
 ;;;
@@ -34,13 +33,13 @@ pro KinMStest_ngc4324,_extra=_extra
 ;;;
 
 ;;; Run KinMS
-   KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,diskthick=dickthick,nsamps=nsamps,cubeout=f,posang=posang,intflux=27.2,_extra=_extra,phasecen=phasecen,voffset=voffset
+   KinMS,xsize,ysize,vsize,cellsize,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,diskthick=dickthick,nsamps=nsamps,cubeout=f,posang=posang,intflux=27.2,_extra=_extra,phasecen=phasecen,voffset=voffset
 ;;;
 
 ;;; Create rough moment zero and one maps and a major axis PVD from
 ;;; the simulation 
    mom0rot=total(f,3)
-    x1=(findgen((xsize/dx))-((xsize/dx)/2.))*dx
+    x1=(findgen((xsize/cellsize))-((xsize/cellsize)/2.))*cellsize
    v1=(findgen(vsize/dv)-((vsize/dv)/2.))*dv
    mom1=mom0rot*0.0
    for i=0,127 do for j=0,127 do mom1[i,j]=mean(v1[where(f[i,j,*] eq max(f[i,j,*]))])
@@ -108,8 +107,7 @@ Fcent=1.
    xsize=128
    ysize=128
    vsize=1400
-   dx=1
-   dy=1
+   cellsize=1
    dv=10
    beamsize=4.
    nsamps=5e5
@@ -124,16 +122,16 @@ vel=interpol([0,50,100,210,210],[0.01,0.5,1,3,500],x)
 
 
 ;;;; Simulate ;;;;
-KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,cubeout=f,nsamps=nsamps,_extra=_extra,intflux=30.,posang=270
+KinMS,xsize,ysize,vsize,cellsize,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,cubeout=f,nsamps=nsamps,_extra=_extra,intflux=30.,posang=270
 ;;;;
 
 
 ;;;; Create plot data from cube ;;;;
    mom0rot=total(f,3)
-   x1=(findgen((xsize/dx))-((xsize/dx)/2.))*dx
+   x1=(findgen((xsize/cellsize))-((xsize/cellsize)/2.))*cellsize
    v1=(findgen(vsize/dv)-((vsize/dv)/2.))*dv
    mom1=(mom0rot*0.0)-10000.0
-   for i=0,(xsize/dx)-1 do for j=0,(ysize/dy)-1 do begin
+   for i=0,(xsize/cellsize)-1 do for j=0,(ysize/cellsize)-1 do begin
       if mom0rot[i,j] gt 0.1*max(mom0rot) then begin
          mom1[i,j]=mean(v1[where(f[i,j,*] eq max(f[i,j,*]))])
       endif
@@ -177,8 +175,7 @@ pro KinMStest_inclouds,_extra=_extra
    xsize=128
    ysize=128
    vsize=1400
-   dx=1
-   dy=1
+   cellsize=1
    dv=10
    beamsize=4.
    inc=0.
@@ -192,13 +189,13 @@ vlos_clouds=FLTARR(52) ;; in this unrealistic case each cloud is at the systemic
 
 
 ;;;; run the simulation with VLOS_CLOUDS ;;;;
-   KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,intflux=30.,inclouds=inclouds,vlos_clouds=vlos_clouds,posang=90.,cubeout=f,_extra=_extra,filename="Testsmile"
+   KinMS,xsize,ysize,vsize,cellsize,dv,beamsize,inc,intflux=30.,inclouds=inclouds,vlos_clouds=vlos_clouds,posang=90.,cubeout=f,_extra=_extra,filename="Testsmile"
 ;;;;
 ;;;; run the simulation with a velocity curve ;;;;
    x=findgen(1000)/10.
    vel=interpol([0,50,100,210,210],[0.01,0.5,1,3,500],x)
    inc=55.
-   KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,intflux=30.,inclouds=inclouds,velprof=vel,velrad=x,cubeout=f2,posang=90.,_extra=_extra
+   KinMS,xsize,ysize,vsize,cellsize,dv,beamsize,inc,intflux=30.,inclouds=inclouds,velprof=vel,velrad=x,cubeout=f2,posang=90.,_extra=_extra
 ;;;;
 
 ;;;; Plot the results ;;;;
@@ -239,8 +236,7 @@ pro KinMStest_inclouds_spiral,_extra=_extra
    xsize=128*2
    ysize=128*2
    vsize=1400
-   dx=1
-   dy=1
+   cellsize=1
    dv=10
    beamsize=4.
    inc=55.
@@ -266,7 +262,7 @@ inclouds=[[x1,x2],[y1,y2],[y1*0.0,y2*0.0]]
 ;;;;
 
 ;;;; run the simulation ;;;;
-   KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,intflux=30.,inclouds=inclouds,velprof=vel,velrad=x,cubeout=f2,flux_clouds=fluxclouds,_extra=_extra,filename="spiraltest"
+   KinMS,xsize,ysize,vsize,cellsize,dv,beamsize,inc,intflux=30.,inclouds=inclouds,velprof=vel,velrad=x,cubeout=f2,flux_clouds=fluxclouds,_extra=_extra,filename="spiraltest"
 ;;;;
 
 ;;;; Plot the results ;;;;
@@ -312,8 +308,7 @@ pro KinMStest_infits,_extra=_extra
    xsize=128
    ysize=128
    vsize=1400
-   dx=1
-   dy=1
+   cellsize=1
    dv=10
    beamsize=5.
    inc=0.
@@ -337,14 +332,14 @@ pro KinMStest_infits,_extra=_extra
 ;;;;
 
 ;;;; run the simulation ;;;;
-   KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,intflux=30.,inclouds=inclouds,vlos_clouds=vlos_clouds,cubeout=f,posang=90.,_extra=_extra,flux_cloud=flux_clouds
+   KinMS,xsize,ysize,vsize,cellsize,dv,beamsize,inc,intflux=30.,inclouds=inclouds,vlos_clouds=vlos_clouds,cubeout=f,posang=90.,_extra=_extra,flux_cloud=flux_clouds
 ;;;;
 
 ;;;; Display the output ;;;;
    device,decomposed=0,RETAIN=2
    loadct,39,/silent
    !p.multi=[0,2,2]
-   x1=(findgen((xsize/dx))-((xsize/dx)/2.))*dx
+   x1=(findgen((xsize/cellsize))-((xsize/cellsize)/2.))*cellsize
    v1=(findgen(vsize/dv)-((vsize/dv)/2.))*dv
    contour,fin,xvec,yvec,/fill,levels=(max(fin)*((findgen(19)+1)/20.)),/xstyle,/ystyle,xrange=[min(x1),max(x1)],yrange=[min(x1),max(x1)],xtitle="RA (arcsec)",ytitle="DEC (arcsec)",color=0,background=255,/iso
    al_legend,["Input"],/top,/right,box=0,textcolor=0
@@ -380,8 +375,7 @@ pro KinMStest_veldisp,_extra=_extra
    xsize=128
    ysize=128
    vsize=1400
-   dx=1
-   dy=1
+   cellsize=1
    dv=10
    beamsize=2.
    nsamps=5e5
@@ -400,13 +394,13 @@ vel=interpol([0,50,100,210,210],[0.01,0.5,1,3,500],x)
 
 
 ;;;; Simulate ;;;;
-KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,cubeout=f,nsamps=nsamps,_extra=_extra,intflux=30.,gassigma=gassigma,posang=270
+KinMS,xsize,ysize,vsize,cellsize,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,cubeout=f,nsamps=nsamps,_extra=_extra,intflux=30.,gassigma=gassigma,posang=270
 ;;;;
 
 
 ;;;; Create plot data from cube ;;;;
    mom0rot=total(f,3)
-   x1=(findgen((xsize/dx))-((xsize/dx)/2.))*dx
+   x1=(findgen((xsize/cellsize))-((xsize/cellsize)/2.))*cellsize
    v1=(findgen(vsize/dv)-((vsize/dv)/2.))*dv
    mom1=mom0rot*0.0
    for i=0,xsize-1 do for j=0,ysize-1 do mom1[i,j]=mean(v1[where(f[i,j,*] eq max(f[i,j,*]))])
@@ -451,8 +445,7 @@ pro KinMStest_diskthick,_extra=_extra
    xsize=128
    ysize=128
    vsize=1400
-   dx=1
-   dy=1
+   cellsize=1
    dv=10
    beamsize=2.
    nsamps=5e5
@@ -471,13 +464,13 @@ vel=interpol([0,50,100,210,210],[0.01,0.5,1,3,500],x)
 
 
 ;;;; Simulate ;;;;
-KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,cubeout=f,nsamps=nsamps,_extra=_extra,intflux=30.,diskthick=diskthick,posang=270
+KinMS,xsize,ysize,vsize,cellsize,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,cubeout=f,nsamps=nsamps,_extra=_extra,intflux=30.,diskthick=diskthick,posang=270
 ;;;;
 
 
 ;;;; Create plot data from cube ;;;;
    mom0rot=total(f,3)
-   x1=(findgen((xsize/dx))-((xsize/dx)/2.))*dx
+   x1=(findgen((xsize/cellsize))-((xsize/cellsize)/2.))*cellsize
    v1=(findgen(vsize/dv)-((vsize/dv)/2.))*dv
    mom1=mom0rot*0.0
    for i=0,xsize-1 do for j=0,ysize-1 do mom1[i,j]=mean(v1[where(f[i,j,*] eq max(f[i,j,*]))])
@@ -521,8 +514,7 @@ pro KinMStest_warp
    xsize=128
    ysize=128
    vsize=1400
-   dx=1
-   dy=1
+   cellsize=1
    dv=10
    beamsize=4.
    nsamps=5e5
@@ -544,16 +536,16 @@ posang=interpol([270,270,300,300],[0.0,15,50,500],x)
 ;;;;
 
 ;;;; Simulate ;;;;
-KinMS,xsize,ysize,vsize,dx,dy,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,cubeout=f,nsamps=nsamps,_extra=_extra,intflux=30.,posang=posang
+KinMS,xsize,ysize,vsize,cellsize,dv,beamsize,inc,sbprof=fx,sbrad=x,velrad=x1,velprof=vel,cubeout=f,nsamps=nsamps,_extra=_extra,intflux=30.,posang=posang
 ;;;;
 
 
 ;;;; Create plot data from cube ;;;;
    mom0rot=total(f,3)
-   x1=(findgen((xsize/dx))-((xsize/dx)/2.))*dx
+   x1=(findgen((xsize/cellsize))-((xsize/cellsize)/2.))*cellsize
    v1=(findgen(vsize/dv)-((vsize/dv)/2.))*dv
    mom1=(mom0rot*0.0)-10000.0
-   for i=0,(xsize/dx)-1 do for j=0,(ysize/dy)-1 do begin
+   for i=0,(xsize/cellsize)-1 do for j=0,(ysize/cellsize)-1 do begin
       if mom0rot[i,j] gt 0.1*max(mom0rot) then begin
          mom1[i,j]=mean(v1[where(f[i,j,*] eq max(f[i,j,*]))])
       endif

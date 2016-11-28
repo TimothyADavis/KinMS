@@ -26,7 +26,7 @@
 ;    datacubes in FITS format.
 ;
 ; CALLING SEQUENCE:
-;    KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,sbprof=,sbrad=,velrad=
+;    KinMS,xs,ys,vs,cellsize,dv,beamsize,inc,sbprof=,sbrad=,velrad=
 ;      ,velprof=,[posang=posang,gassigma=,noiselev=,galname=,diskthick=,cleanout=
 ;      ,ra=,dec=,nsamps=,cubeout=,flux_clouds=,inclouds=,vlos_clouds=]
 ;
@@ -34,9 +34,8 @@
 ;    XS        X-axis size for resultant cube (in arcseconds)
 ;    YS        Y-axis size for resultant cube (in arcseconds)
 ;    VS        Velocity axis size for resultant cube (in km/s)
-;    DX        Pixel size in x-direction (arcsec/pixel)
-;    DX        Pixel size in y-direction (arcsec/pixel)
-;    DX        Channel size in velocity  (km/s/chan)
+;    CELLSIZE        Cell size (arcsec/pixel)
+;    DV        Channel size in velocity  (km/s/chan)
 ;    BEAMSIZE  Scalar or three element vector for size of convolving
 ;              beam (in arcseconds).  If a scalar then beam is assumed
 ;              to be circular. If a vector then denotes beam major
@@ -156,7 +155,10 @@
 ;   RADTRANSFER   Run the radiative transfer function rad_transfer
 ;                 to populate the cloud flux vector. See the help for
 ;                 that function for more details.
-;
+;	GASGRAV       Two dimensional vector, with [mass,distance].
+;                 If set, allows you to include the potential of the gas
+;				  in the modelling, assuming its total mass is the first
+;                 element, and the distance is the second (Mpc).
 ;
 ;  OPTIONAL OUTPUTS:
 ;
@@ -263,8 +265,15 @@ function kinms_create_velfield_onesided,velrad,velprof,r_flat,inc,posang,gassigm
   return,los_vel
   end
 
+function gasgravity_velocity,xpos,ypos,zpos,massdist,phasecen,velrad
+	;;;; This function allows you to include the potential of the gas on the fly
+		rad=sqrt(((xpos-(phasecen[0]))^2) + ((ypos-(phasecen[1]))^2)+zpos^2)						;; 3D radius	
+		cummass=(findgen(n_elements(xpos))+1)*(massdist[0]/float(n_elements(xpos)))					;; cumulative mass
+		cummas_inter=interpol([cummass,max(cummass)],[rad[sort(rad)],max(velrad) > max(rad)],velrad);; interpolate to our radial points
+		return,sqrt((4.301e-3*cummas_inter)/(4.84*velrad*massdist[1]))								;; return velocity
+end
 
-pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra_position=ra,dec_position=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang,sb_sampfunc=sb_sampfunc,vel_func=vel_func,intsigma=intsigma,radtransfer=radtransfer
+pro KinMS,xs,ys,vs,cellsize,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra_position=ra,dec_position=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang,sb_sampfunc=sb_sampfunc,vel_func=vel_func,intsigma=intsigma,radtransfer=radtransfer,gasgrav=gasgrav
 ;!EXCEPT = 2
   
  ;;;; Main procedure
@@ -306,27 +315,27 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
 ;;;;
   
 ;;;; work out images sizes ;;;;
-  xsize = round(xs/dx)
-  ysize = round(ys/dy)
+  xsize = round(xs/cellsize)
+  ysize = round(ys/cellsize)
   vsize = round(vs/dv)
-  cent=[(xsize/2.)+(phasecen[0]/dx),(ysize/2.)+(phasecen[1]/dy),(vsize/2.)+(voffset/dv)]
+  cent=[(xsize/2.)+(phasecen[0]/cellsize),(ysize/2.)+(phasecen[1]/cellsize),(vsize/2.)+(voffset/dv)]
   velcube=(findgen(vsize)-cent[2])*dv
-  vphasecent=(vphasecen-phasecen)/[dx,dy]
+  vphasecent=(vphasecen-phasecen)/[cellsize,cellsize]
 ;;;;
 
  if not keyword_set(inclouds) then begin
      inclouds=call_FUNCTION(sb_sampfunc,sbrad,sbprof,nsamps,seed,r_flat=r_flat,diskthick=diskthick,xpos=xpos,ypos=ypos,zpos=zpos) ;; use the function in sb_sampfunc to setup inclouds, if its not already set
-     r_flat/=dx
-     xpos/=dx
-     ypos/=dy
-     zpos/=dx
+     r_flat/=cellsize
+     xpos/=cellsize
+     ypos/=cellsize
+     zpos/=cellsize
   endif else begin
      
 ;;;; set up INCLOUDS for use
-     xpos=reform(INCLOUDS[*,0]/dx)
-     ypos=reform(INCLOUDS[*,1]/dy)
-     zpos=reform(INCLOUDS[*,2]/dx)
-     if n_elements(r_flat) eq 0 then r_flat=sqrt(((xpos-(phasecen[0]/dx))^2) + ((ypos-(phasecen[1]/dy))^2))
+     xpos=reform(INCLOUDS[*,0]/cellsize)
+     ypos=reform(INCLOUDS[*,1]/cellsize)
+     zpos=reform(INCLOUDS[*,2]/cellsize)
+     if n_elements(r_flat) eq 0 then r_flat=sqrt(((xpos-(phasecen[0]/cellsize))^2) + ((ypos-(phasecen[1]/cellsize))^2))
   endelse
   if keyword_set(VLOS_CLOUDS) then los_vel=VLOS_CLOUDS
   
@@ -336,10 +345,18 @@ pro KinMS,xs,ys,vs,dx,dy,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=s
 ;;;; create velocity structure ;;;;
   if not keyword_set(VLOS_CLOUDS) then begin
 
+	  if n_elements(gasgrav) eq 2 then begin
+		  ;;; include the potential of the gas
+		  gasgravvel=gasgravity_velocity(xpos*cellsize,ypos*cellsize,zpos*cellsize,gasgrav,phasecen,velrad)
+		  velprof=sqrt(velprof^2 + gasgravvel^2)
+		endif
+
+
+
      if n_elements(inc) gt 1 then inc_rad=interpol(inc,velrad,r_flat) else inc_rad=fltarr(n_elements(r_flat))+inc
      if n_elements(posang) gt 1 then posang_rad=interpol(posang,velrad,r_flat) else posang_rad=posang
      
-     los_vel=call_FUNCTION(vel_func,velrad/dx,velprof,r_flat,inc,posang,gassigma,seed,xpos,ypos,vphasecent,vposang=vposang,vradial=vradial,inc_rad=inc_rad,posang_rad=posang_rad)
+     los_vel=call_FUNCTION(vel_func,velrad/cellsize,velprof,r_flat,inc,posang,gassigma,seed,xpos,ypos,vphasecent,vposang=vposang,vradial=vradial,inc_rad=inc_rad,posang_rad=posang_rad)
      ;;;; project face on clouds to desired inclination ;;;;
      c = cos(inc_rad/!radeg)
      s = sin(inc_rad/!radeg)
@@ -395,7 +412,7 @@ if not keyword_set(FLUX_CLOUDS) and keyword_set(radtransfer) then FLUX_CLOUDS=ra
 
 ;;;; do beamsize convolution ;;;;
   if not keyword_set(cleanout) then begin 
-       psf=makebeam([xsize,ysize],[beamsize[0]/dx,beamsize[1]/dy],rot=beamsize[2])
+       psf=makebeam([xsize,ysize],[beamsize[0]/cellsize,beamsize[1]/cellsize],rot=beamsize[2])
 	   doconvolve=where(total(total(cube,1),1) gt 0.0) 
      ;; only convolve the planes with flux in them for speed
      for nplane=0,n_elements(doconvolve)-1 do begin
@@ -423,8 +440,8 @@ if keyword_set(intflux) then begin
      sxdelpar,h,'COMMENT'
      sxaddpar,h,'NAXIS4',1
      sxaddpar,h,'NAXIS',4
-     sxaddpar,h,'CDELT1',(dx)/(-3600d0)
-     sxaddpar,h,'CDELT2',(dy)/3600d0
+     sxaddpar,h,'CDELT1',(cellsize)/(-3600d0)
+     sxaddpar,h,'CDELT2',(cellsize)/3600d0
      sxaddpar,h,'CDELT3',(dv)*1000d,"m/s"
      sxaddpar,h,'CDELT4',1d
      sxaddpar,h,'CRPIX1',double(cent[0]-1)
