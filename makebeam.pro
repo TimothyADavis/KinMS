@@ -1,7 +1,7 @@
 function makebeam, npixel,st_dev,rot=rot
 	if not keyword_set(rot) then rot=0.0
 	cents=npixel/2.
-    st_dev=st_dev/2.355	
+	st_dev=st_dev/2.355	
 	dirfac=(tan(!dtor*rot) gt 0)*2 - 1 ;; get the sign of the rotatation
 	x=transpose(findgen(npixel[1],npixel[0]) mod npixel[1]) - cents[0]
 	y=(findgen(npixel[0],npixel[1]) mod npixel[0]) - cents[1]   
