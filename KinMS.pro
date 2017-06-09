@@ -320,7 +320,7 @@ pro KinMS,xs,ys,vs,cellsize,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbra
   vsize = round(vs/dv)
   cent=[(xsize/2.)+(phasecen[0]/cellsize),(ysize/2.)+(phasecen[1]/cellsize),(vsize/2.)+(voffset/dv)]
   velcube=(findgen(vsize)-cent[2])*dv
-  vphasecent=(vphasecen-phasecen)/[cellsize,cellsize]
+  vphasecent=(vphasecen)/[cellsize,cellsize]
 ;;;;
 
  if not keyword_set(inclouds) then begin
@@ -426,7 +426,7 @@ if keyword_set(intflux) then begin
      if keyword_set(flux_clouds) then begin
         cube*=(total(flux_clouds)/total(cube)) ;; make total flux equal to total(flux_clouds)
      endif else begin
-        cube*=((INT_TABULATED( sbrad, sbprof))/((total(cube)*dv)/(sqrt(beamsize[0]*beamsize[1])^2))) ;; normalize to get same flux as input sb profile variable
+        cube*=((INT_TABULATED( sbrad, sbprof)*total(psf))/(total(cube)*dv)) ;; normalize to get same flux as input sb profile variable
      endelse
   endelse
 
