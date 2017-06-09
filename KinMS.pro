@@ -351,10 +351,8 @@ pro KinMS,xs,ys,vs,cellsize,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbra
 		  velprof=sqrt(velprof^2 + gasgravvel^2)
 		endif
 
-
-
-     if n_elements(inc) gt 1 then inc_rad=interpol(inc,velrad,r_flat) else inc_rad=fltarr(n_elements(r_flat))+inc
-     if n_elements(posang) gt 1 then posang_rad=interpol(posang,velrad,r_flat) else posang_rad=posang
+     if n_elements(inc) gt 1 then inc_rad=interpol(inc,velrad/cellsize,r_flat) else inc_rad=fltarr(n_elements(r_flat))+inc
+     if n_elements(posang) gt 1 then posang_rad=interpol(posang,velrad/cellsize,r_flat) else posang_rad=posang
      
      los_vel=call_FUNCTION(vel_func,velrad/cellsize,velprof,r_flat,inc,posang,gassigma,seed,xpos,ypos,vphasecent,vposang=vposang,vradial=vradial,inc_rad=inc_rad,posang_rad=posang_rad)
      ;;;; project face on clouds to desired inclination ;;;;
