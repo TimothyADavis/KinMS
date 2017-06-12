@@ -241,6 +241,7 @@ function kinms_create_velfield_onesided,velrad,velprof,r_flat,inc,posang,gassigm
   
   vrad=interpol(velprof,velrad,r_flat)
   los_vel=dblarr(n_elements(vrad))
+  vphasecent_proj=vphasecent/[1.0,cos(inc*!dtor)] ;; vphasecen defined in sky coordinates, so need to adjust minor axis 
 
   ;;; in case of warps/inflow/outflow then setup vectors to deal with this
 
@@ -256,10 +257,10 @@ function kinms_create_velfield_onesided,velrad,velprof,r_flat,inc,posang,gassigm
   ;;;;; project velocities taking into account inclination, which may change with radius
   ang2rot=((posang_rad-vposang_rad))
   los_vel=veldisp                                                                                                                              ;; random motions
-  los_vel+=(-1)*vrad*(cos(atan(float(ypos+vphasecent[1]),float(xpos+vphasecent[0]))+(!dtor*(ang2rot)))*sin(inc_rad*!dtor))           ;; circular motions
+  los_vel+=(-1)*vrad*(cos(atan(float(ypos+vphasecent_proj[1]),float(xpos+vphasecent_proj[0]))+(!dtor*(ang2rot)))*sin(inc_rad*!dtor))           ;; circular motions
   if vradial ne 0 then begin
 	  if n_elements(vradial) gt 1 then vradial_rad=interpol(vradial,velrad,r_flat) else vradial_rad=fltarr(n_elements(r_flat))+vradial
-      los_vel+=vradial_rad*(sin(atan(float(ypos+vphasecent[1]),float(xpos+vphasecent[0]))+(!dtor*(ang2rot)))*sin(inc_rad*!dtor))    ;; inflow/outflow
+      los_vel+=vradial_rad*(sin(atan(float(ypos+vphasecent_proj[1]),float(xpos+vphasecent_proj[0]))+(!dtor*(ang2rot)))*sin(inc_rad*!dtor))    ;; inflow/outflow
   endif
   ;;;;;;
   return,los_vel
