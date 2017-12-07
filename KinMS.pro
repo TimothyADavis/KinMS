@@ -390,7 +390,7 @@ if not keyword_set(FLUX_CLOUDS) and keyword_set(radtransfer) then FLUX_CLOUDS=ra
   subs = where(((x2_cent0 ge 0L) AND (x2_cent0 lt xsize) AND (y2_cent1 ge 0L) AND (y2_cent1 lt ysize) AND (los_vel_dv_cent2 ge 0L) AND (los_vel_dv_cent2 lt vsize)) EQ 1B, nsubs)
 
  ;;;For robustness should really test nsubs GT 0 before continuing
-  if nsubs gt 0L then begin
+  if nsubs gt 1L then begin
      if not keyword_set(FLUX_CLOUDS) then begin
        cube=double(hist_nd(transpose([[x2_cent0[subs]],[y2_cent1[subs]],[los_vel_dv_cent2[subs]]]),1,min=[0,0,0],max=[xsize,ysize,vsize]-1))
      endif else begin
@@ -403,7 +403,7 @@ if not keyword_set(FLUX_CLOUDS) and keyword_set(radtransfer) then FLUX_CLOUDS=ra
            cube[csub] = cube[csub] + const
         endfor
      endelse
-  end
+  endif else cube=dblarr(xsize,ysize,vsize)
 
 
 ;;;;
