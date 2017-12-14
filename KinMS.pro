@@ -216,10 +216,9 @@ function kinms_samplefromarbdist_onesided,sbrad,sbprof,nsamps,seed,r_flat=r_flat
   ;;;; This function takes the input radial distribution and draws
   ;;;; n samples from under it. It also accounts for disk thickness
   
-     px=dblarr(n_elements(sbprof))
      sbprofboost=sbprof*(2*!dpi*abs(sbrad))                                                        ;; boost flux in outer parts to compensate for spreading over 2pi radians
-     for i=1,n_elements(sbrad)-1 do px[i] = INT_TABULATED((sbrad[0:i]),(sbprofboost[0:i]),/double) ;; integrate surf brightness w.r.t radius   
-     px/=max(px)                                                                                   ;; normalize
+     px=total(sbprofboost,/cum,/double)                                                            ;; integrate surf brightness w.r.t radius   
+	 px/=max(px)                                                                                   ;; normalize
      pick=randomu(seed[0],nsamps)                                                                  ;; pick random y to transform
      phi=randomu(seed[1],nsamps)*2*!dpi                                                            ;; random angle
      r_flat=interpol(sbrad,px,pick)                                                                ;; invert to get correct distribution
