@@ -222,7 +222,7 @@ function kinms_samplefromarbdist_onesided,sbrad,sbprof,nsamps,seed,r_flat=r_flat
      pick=randomu(seed[0],nsamps)                                                                  ;; pick random y to transform
      phi=randomu(seed[1],nsamps)*2*!dpi                                                            ;; random angle
      r_flat=interpol(sbrad,px,pick)                                                                ;; invert to get correct distribution
-     if n_elements(diskthick) gt 1 then diskthick_here=interpol(diskthick,sbrad,r_flat) else  else if n_elements(diskthick) eq 1 then diskthick_here=diskthick else diskthick_here=0.0
+     if n_elements(diskthick) gt 1 then diskthick_here=interpol(diskthick,sbrad,r_flat) else if n_elements(diskthick) eq 1 then diskthick_here=diskthick else diskthick_here=0.0
      zpos=(diskthick_here)*((randomu(seed[2],nsamps)*2)-1)                                         ;; do disk thickness
      r_3d = sqrt((r_flat^2)+zpos^2)                                                                ;; 3d distance to each
      theta=acos(zpos/r_3d)                                                                         ;; angle out of plane
