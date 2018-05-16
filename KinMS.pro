@@ -306,7 +306,7 @@ pro KinMS,xs,ys,vs,cellsize,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbra
   if not keyword_set(ra) then ra=0.
   if not keyword_set(dec) then dec=0.
   if not keyword_set(phasecen) then phasecen=[0,0]
-  if not keyword_set(vphasecen) then vphasecen=phasecen
+  if not keyword_set(vphasecen) then vphasecen=[0,0]
   if keyword_set(fixseed) then begin
      seed=indgen(4)+100 ;; fix seeds 
   endif else seed=randomu(seedit,4)*100. ;; random seeds
