@@ -1,7 +1,7 @@
 function makebeam, beam_pix,rot=rot,npixel=npixel
 	if not keyword_set(rot) then rot=0.0
   	if not keyword_set(npixel) then begin
-		npixel=max(beam_pix)*[5,5]
+		npixel=round(max(beam_pix)*[5,5])
   		if not odd(npixel[0]) then npixel+=1
 	endif
 	cents=FLOOR((npixel-1)/2)
