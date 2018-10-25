@@ -159,6 +159,8 @@
 ;                 If set, allows you to include the potential of the gas
 ;				  in the modelling, assuming its total mass is the first
 ;                 element, and the distance is the second (Mpc).
+;   MKHDR         If MKHDR is set then the fits header will be created and
+;                 returned in HDR.       
 ;
 ;  OPTIONAL OUTPUTS:
 ;
@@ -169,6 +171,8 @@
 ;
 ;    VLOS_CLOUDS   Returns the velocity of each point source created for your
 ;                  model, incase they are useful for a future call.
+;
+;    HDR           Header of the resultant fits file
 ;    
 ;   
 ; SIDE EFFECTS:
@@ -207,6 +211,7 @@
 ; 28/10/2015  v1.6 - Updated to allow hot swapping of SBprofile and
 ;                    velprofile handling.
 ; 07/04/2016  v1.65- Added the rad_transfer mechanism 
+; 25/09/2018  v1.7 - Fixed the flux conservation and centering 
 ;
 ;##############################################################################
 
@@ -273,7 +278,7 @@ function gasgravity_velocity,xpos,ypos,zpos,massdist,phasecen,velrad
 		return,sqrt((4.301e-3*cummas_inter)/(4.84*velrad*massdist[1]))								;; return velocity
 end
 
-pro KinMS,xs,ys,vs,cellsize,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra_position=ra,dec_position=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang,sb_sampfunc=sb_sampfunc,vel_func=vel_func,intsigma=intsigma,radtransfer=radtransfer,gasgrav=gasgrav
+pro KinMS,xs,ys,vs,cellsize,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra_position=ra,dec_position=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang,sb_sampfunc=sb_sampfunc,vel_func=vel_func,intsigma=intsigma,radtransfer=radtransfer,gasgrav=gasgrav,mkhdr=mkhdr,hdr=hdr
 ;!EXCEPT = 2
   
  ;;;; Main procedure
@@ -410,37 +415,46 @@ if not keyword_set(FLUX_CLOUDS) and keyword_set(radtransfer) then FLUX_CLOUDS=ra
 
 ;;;; do beamsize convolution ;;;;
   if not keyword_set(cleanout) then begin 
-       psf=makebeam([xsize,ysize],[beamsize[0]/cellsize,beamsize[1]/cellsize],rot=beamsize[2])
+	   beam_pix=[beamsize[0]/cellsize,beamsize[1]/cellsize]
+	   psf=makebeam(beam_pix,rot=beamsize[2])
+	   totalpsf=total(psf)	 
 	   doconvolve=where(total(total(cube,1),1) gt 0.0) 
      ;; only convolve the planes with flux in them for speed
      for nplane=0,n_elements(doconvolve)-1 do begin
         ;; if you want a convolved cube, then convolve it
-          cube[*,*,doconvolve[nplane]] = convol_fft(cube[*,*,doconvolve[nplane]],psf,KERNEL_FFT=psf_FT)
+	
+          cube[*,*,doconvolve[nplane]] = convolve(cube[*,*,doconvolve[nplane]],psf, FT_PSF=psf_FT);convol_fft(cube[*,*,doconvolve[nplane]],psf,KERNEL_FFT=psf_FT);;
        endfor
   endif
 ;;;;
 
+
 if keyword_set(intflux) then begin
-      if not keyword_set(cleanout) then cube *= ((intflux*total(psf))/((total(cube)*dv))) else cube *= ((intflux)/((total(cube)*dv))) ;; make total flux equal to influx
-  endif else begin
+      if not keyword_set(cleanout) then begin
+		  cube *= ((intflux*totalpsf)/((total(cube)*dv))) 
+	  endif else cube *= ((intflux)/((total(cube)*dv))) ;; make total flux equal to influx
+endif else begin
      if keyword_set(flux_clouds) then begin
         cube*=(total(flux_clouds)/total(cube)) ;; make total flux equal to total(flux_clouds)
      endif else begin
-        cube*=((INT_TABULATED( sbrad, sbprof)*total(psf))/(total(cube)*dv)) ;; normalize to get same flux as input sb profile variable
+        cube*=((INT_TABULATED( sbrad, sbprof)*totalpsf)/(total(cube)*dv)) ;; normalize to get same flux as input sb profile variable
      endelse
-  endelse
+endelse
+  
+
+  
 
 ;;;; write cube ;;;;
 
-  if keyword_set(galname) then begin
+if keyword_set(galname) or keyword_set(mkhdr) then begin
      mkhdr, h, cube
      sxdelpar,h,'DATE'
      sxdelpar,h,'COMMENT'
      sxaddpar,h,'NAXIS4',1
      sxaddpar,h,'NAXIS',4
-     sxaddpar,h,'CDELT1',(cellsize)/(-3600d0)
-     sxaddpar,h,'CDELT2',(cellsize)/3600d0
-     sxaddpar,h,'CDELT3',(dv)*1000d,"m/s"
+     sxaddpar,h,'CDELT1',double(cellsize)/(-3600d0)
+     sxaddpar,h,'CDELT2',double(cellsize)/3600d0
+     sxaddpar,h,'CDELT3',double(dv)*1000d,"m/s"
      sxaddpar,h,'CDELT4',1d
      sxaddpar,h,'CRPIX1',double(cent[0]-1)
      sxaddpar,h,'CRPIX2',double(cent[1])
@@ -456,8 +470,8 @@ if keyword_set(intflux) then begin
      sxaddpar,h,'CUNIT4',''
      sxaddpar,h,'BSCALE',1d,'PHYSICAL = PIXEL*BSCALE + BZERO'              
      sxaddpar,h,'BZERO',0d                                                                                     
-     sxaddpar,h,'BMIN',min(beamsize[0:1]/3600d0)
-     sxaddpar,h,'BMAJ',max(beamsize[0:1]/3600d0)
+     sxaddpar,h,'BMIN',double(min(beamsize[0:1]/3600d0))
+     sxaddpar,h,'BMAJ',double(max(beamsize[0:1]/3600d0))
      sxaddpar,h,'BTYPE','Intensity'  
      sxaddpar,h,'BPA',beamsize[2]
      sxaddpar,h,'CTYPE1','RA---SIN' 
@@ -469,10 +483,11 @@ if keyword_set(intflux) then begin
      sxaddpar,h,'BUNIT','Jy/beam'
      sxaddpar,h,'RESTFRQ',double(restfreq),'[Hz]'
      sxaddpar,h,'SPECSYS','BARYCENT'
-     writefits,galname+"_simcube.fits",cube,h
-  endif
-  
-  cubeout=cube
+	 hdr=h
+if keyword_set(galname) then writefits,galname+"_simcube.fits",cube,h
+endif
+
+cubeout=cube
   
 end
 
