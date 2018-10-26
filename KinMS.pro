@@ -270,12 +270,12 @@ function kinms_create_velfield_onesided,velrad,velprof,r_flat,inc,posang,gassigm
   return,los_vel
   end
 
-function gasgravity_velocity,xpos,ypos,zpos,massdist,phasecen,velrad
-	;;;; This function allows you to include the potential of the gas on the fly
+function gasgravity_velocity2,xpos,ypos,zpos,massdist,phasecen,velrad
+	;;;; This function allows you to include the potential of the gas on the fly, returns the velocity squared.
 		rad=sqrt(((xpos-(phasecen[0]))^2) + ((ypos-(phasecen[1]))^2)+zpos^2)						;; 3D radius	
 		cummass=(findgen(n_elements(xpos))+1)*(massdist[0]/float(n_elements(xpos)))					;; cumulative mass
 		cummas_inter=interpol([cummass,max(cummass)],[rad[sort(rad)],max(velrad) > max(rad)],velrad);; interpolate to our radial points
-		return,sqrt((4.301e-3*cummas_inter)/(4.84*velrad*massdist[1]))								;; return velocity
+		return,((4.301e-3*cummas_inter)/(4.84*velrad*massdist[1]))								;; return velocity
 end
 
 pro KinMS,xs,ys,vs,cellsize,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbrad=sbrad,velrad=velrad,velprof=velprof,filename=galname,diskthick=diskthick,cleanout=cleanout,ra_position=ra,dec_position=dec,nsamps=nsamps,cubeout=cubeout,posang=posang,intflux=intflux,inclouds=inclouds,vlos_clouds=vlos_clouds,flux_clouds=flux_clouds,vsys=vsys,restfreq=restfreq,phasecen=phasecen,voffset=voffset,fixseed=fixseed,vradial=vradial,vphasecen=vphasecen,vposang=vposang,sb_sampfunc=sb_sampfunc,vel_func=vel_func,intsigma=intsigma,radtransfer=radtransfer,gasgrav=gasgrav,mkhdr=mkhdr,hdr=hdr
@@ -348,18 +348,20 @@ pro KinMS,xs,ys,vs,cellsize,dv,beamsize,inc,gassigma=gassigma,sbprof=sbprof,sbra
 
 
 ;;;; create velocity structure ;;;;
-  if not keyword_set(VLOS_CLOUDS) then begin
+  
 
+  if not keyword_set(VLOS_CLOUDS) then begin
+      v_circ=velprof
 	  if n_elements(gasgrav) eq 2 then begin
 		  ;;; include the potential of the gas
-		  gasgravvel=gasgravity_velocity(xpos*cellsize,ypos*cellsize,zpos*cellsize,gasgrav,phasecen,velrad)
-		  velprof=sqrt(velprof^2 + gasgravvel^2)
+		  gasgravvel2=gasgravity_velocity2(xpos*cellsize,ypos*cellsize,zpos*cellsize,gasgrav,phasecen,velrad)
+		  v_circ=sqrt(v_circ*v_circ + gasgravvel2)
 		endif
 
      if n_elements(inc) gt 1 then inc_rad=interpol(inc,velrad/cellsize,r_flat) else inc_rad=fltarr(n_elements(r_flat))+inc
      if n_elements(posang) gt 1 then posang_rad=interpol(posang,velrad/cellsize,r_flat) else posang_rad=posang
      
-     los_vel=call_FUNCTION(vel_func,velrad/cellsize,velprof,r_flat,inc,posang,gassigma,seed,xpos,ypos,vphasecent,vposang=vposang,vradial=vradial,inc_rad=inc_rad,posang_rad=posang_rad)
+     los_vel=call_FUNCTION(vel_func,velrad/cellsize, v_circ,r_flat,inc,posang,gassigma,seed,xpos,ypos,vphasecent,vposang=vposang,vradial=vradial,inc_rad=inc_rad,posang_rad=posang_rad)
      ;;;; project face on clouds to desired inclination ;;;;
      c = cos(inc_rad/!radeg)
      s = sin(inc_rad/!radeg)
